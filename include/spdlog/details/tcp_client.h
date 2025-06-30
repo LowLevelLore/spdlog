@@ -106,7 +106,7 @@ public:
     // try to connect or throw on failure
     void connect(const std::string &host, int port, int timeout_ms = 0) {
         close();
-        struct addrinfo hints{};
+        struct addrinfo hints {};
         memset(&hints, 0, sizeof(struct addrinfo));
         hints.ai_family = AF_UNSPEC;      // To work with IPv4, IPv6, and so on
         hints.ai_socktype = SOCK_STREAM;  // TCP
@@ -151,9 +151,11 @@ public:
             throw_spdlog_ex("::connect failed", last_errno);
         }
 
-        // Set timeouts for send and recv
-        ::setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
-        ::setsockopt(socket_, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
+        if (timeout_ms > 0) {
+            // Set timeouts for send and recv
+            ::setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
+            ::setsockopt(socket_, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
+        }
 
         // set TCP_NODELAY
         int enable_flag = 1;
