@@ -58,58 +58,81 @@ public:
 
     SOCKET fd() const { return socket_; }
 
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+    // Returns 0 on success, SOCKET_ERROR on failure (check WSAGetLastError()).
     int connect_socket_with_timeout(SOCKET sockfd,
                                     const struct sockaddr *addr,
                                     int addrlen,
                                     const timeval &tv) {
-        // Blocking if no timeout
+        // If no timeout requested, do a normal blocking connect.
         if (tv.tv_sec == 0 && tv.tv_usec == 0) {
             int rv = ::connect(sockfd, addr, addrlen);
-            if (rv == SOCKET_ERROR && WSAGetLastError() == WSAEISCONN) return 0;
+            if (rv == SOCKET_ERROR && WSAGetLastError() == WSAEISCONN) {
+                return 0;
+            }
             return rv;
         }
 
-        // Set non-blocking
+        // Switch to non‐blocking mode
         u_long mode = 1UL;
-        ::ioctlsocket(sockfd, FIONBIO, &mode);
+        if (::ioctlsocket(sockfd, FIONBIO, &mode) == SOCKET_ERROR) {
+            return SOCKET_ERROR;
+        }
 
         int rv = ::connect(sockfd, addr, addrlen);
         int last_error = WSAGetLastError();
         if (rv == 0 || last_error == WSAEISCONN) {
             mode = 0UL;
-            ::ioctlsocket(sockfd, FIONBIO, &mode);
+            if (::ioctlsocket(sockfd, FIONBIO, &mode) == SOCKET_ERROR) {
+                return SOCKET_ERROR;
+            }
             return 0;
         }
         if (last_error != WSAEWOULDBLOCK) {
+            // Real error
             mode = 0UL;
-            ::ioctlsocket(sockfd, FIONBIO, &mode);
+            if (::ioctlsocket(sockfd, FIONBIO, &mode)) {
+                return SOCKET_ERROR;
+            }
             return SOCKET_ERROR;
         }
 
-        // Wait for writability
+        // Wait until socket is writable or timeout expires
         fd_set wfds;
         FD_ZERO(&wfds);
         FD_SET(sockfd, &wfds);
 
-        rv = ::select(0, nullptr, &wfds, nullptr, &tv);
-        mode = 0UL;
-        ::ioctlsocket(sockfd, FIONBIO, &mode);
+        rv = ::select(0, nullptr, &wfds, nullptr, const_cast<timeval *>(&tv));
 
-        if (rv <= 0) {
-            // timeout or error
-            if (rv == 0) WSASetLastError(WSAETIMEDOUT);
+        // Restore blocking mode regardless of select result
+        mode = 0UL;
+        if (::ioctlsocket(sockfd, FIONBIO, &mode) == SOCKET_ERROR) {
             return SOCKET_ERROR;
         }
 
-        // Check socket for errors
+        if (rv == 0) {
+            WSASetLastError(WSAETIMEDOUT);
+            return SOCKET_ERROR;
+        }
+        if (rv == SOCKET_ERROR) {
+            return SOCKET_ERROR;
+        }
+
         int so_error = 0;
         int len = sizeof(so_error);
-        ::getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (char *)&so_error, &len);
+        if (::getsockopt(sockfd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(&so_error), &len) ==
+            SOCKET_ERROR) {
+            return SOCKET_ERROR;
+        }
         if (so_error != 0 && so_error != WSAEISCONN) {
+            // connection failed
             WSASetLastError(so_error);
             return SOCKET_ERROR;
         }
-        return 0;
+
+        return 0;  // success
     }
 
     // try to connect or throw on failure
