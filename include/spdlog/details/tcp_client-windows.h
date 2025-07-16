@@ -57,11 +57,7 @@ public:
     }
 
     SOCKET fd() const { return socket_; }
-
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-    // Returns 0 on success, SOCKET_ERROR on failure (check WSAGetLastError()).
+    
     int connect_socket_with_timeout(SOCKET sockfd,
                                     const struct sockaddr *addr,
                                     int addrlen,
