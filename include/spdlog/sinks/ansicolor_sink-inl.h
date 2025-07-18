@@ -119,8 +119,7 @@ SPDLOG_INLINE void ansicolor_sink<ConsoleMutex>::print_ccode_(
     const string_view_t &color_code) const {
 #ifdef _WIN32
     DWORD bytes_written = 0;
-    HANDLE h =
-        (target_file_ == stdout) ? GetStdHandle(STD_OUTPUT_HANDLE) : GetStdHandle(STD_ERROR_HANDLE);
+    HANDLE h = reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(target_file_)));
     // WriteFile bypasses the extra \r injection
     WriteFile(h, color_code.data(), static_cast<DWORD>(color_code.size()), &bytes_written, nullptr);
 #else
@@ -134,8 +133,7 @@ SPDLOG_INLINE void ansicolor_sink<ConsoleMutex>::print_range_(const memory_buf_t
                                                               size_t end) const {
 #ifdef _WIN32
     DWORD bytes_written = 0;
-    HANDLE h =
-        (target_file_ == stdout) ? GetStdHandle(STD_OUTPUT_HANDLE) : GetStdHandle(STD_ERROR_HANDLE);
+    HANDLE h = reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(target_file_)));
     WriteFile(h, formatted.data() + start, static_cast<DWORD>(end - start), &bytes_written,
               nullptr);
 #else
