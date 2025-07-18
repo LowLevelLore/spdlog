@@ -12,9 +12,6 @@
 
 #if defined(_WIN32)
     #include <spdlog/details/windows_include.h>
-    #include <fileapi.h>  // WriteFile
-    #include <io.h>       // _get_osfhandle
-    #include <stdio.h>    // _fileno
 #endif
 
 namespace spdlog {
