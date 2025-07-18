@@ -10,6 +10,13 @@
 #include <spdlog/details/os.h>
 #include <spdlog/pattern_formatter.h>
 
+#if defined(_WIN32)
+    #include <spdlog/details/windows_include.h>
+    #include <fileapi.h>  // WriteFile
+    #include <io.h>       // _get_osfhandle
+    #include <stdio.h>    // _fileno
+#endif
+
 namespace spdlog {
 namespace sinks {
 
@@ -113,14 +120,30 @@ SPDLOG_INLINE void ansicolor_sink<ConsoleMutex>::set_color_mode_(color_mode mode
 template <typename ConsoleMutex>
 SPDLOG_INLINE void ansicolor_sink<ConsoleMutex>::print_ccode_(
     const string_view_t &color_code) const {
+#ifdef _WIN32
+    DWORD bytes_written = 0;
+    HANDLE h =
+        (target_file_ == stdout) ? GetStdHandle(STD_OUTPUT_HANDLE) : GetStdHandle(STD_ERROR_HANDLE);
+    // WriteFile bypasses the extra \r injection
+    WriteFile(h, color_code.data(), static_cast<DWORD>(color_code.size()), &bytes_written, nullptr);
+#else
     details::os::fwrite_bytes(color_code.data(), color_code.size(), target_file_);
+#endif
 }
 
 template <typename ConsoleMutex>
 SPDLOG_INLINE void ansicolor_sink<ConsoleMutex>::print_range_(const memory_buf_t &formatted,
                                                               size_t start,
                                                               size_t end) const {
+#ifdef _WIN32
+    DWORD bytes_written = 0;
+    HANDLE h =
+        (target_file_ == stdout) ? GetStdHandle(STD_OUTPUT_HANDLE) : GetStdHandle(STD_ERROR_HANDLE);
+    WriteFile(h, formatted.data() + start, static_cast<DWORD>(end - start), &bytes_written,
+              nullptr);
+#else
     details::os::fwrite_bytes(formatted.data() + start, end - start, target_file_);
+#endif
 }
 
 template <typename ConsoleMutex>
